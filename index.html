@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frost Transport | Secure Booking Portal</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDOPkYduNBvti4HWX2izIhCrrQ02uk5SL0&libraries=geometry,places&callback=initMap"></script>
+    
+    <style>
+        :root { --frost-red: #c32026; --frost-grey: #1e293b; --frost-dark-navy: #0f172a; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background-image: url('Pic-35-1.png'); background-size: cover; background-attachment: fixed; }
+        body::before { content: ""; position: fixed; inset: 0; background: rgba(241, 245, 249, 0.9); z-index: 0; }
+        
+        /* Updated Auth Overlay with Logo */
+        #authOverlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.98); backdrop-filter: blur(12px); z-index: 100; display: none; align-items: center; justify-content: center; }
+        .frost-card { position: relative; z-index: 10; background: rgba(255, 255, 255, 0.9); border-radius: 6px; border: 1px solid rgba(203, 213, 225, 0.6); box-shadow: 0 10px 15px rgba(0,0,0,0.05); overflow: hidden; }
+        .card-header-bar { height: 6px; background: var(--frost-dark-navy); width: 100%; }
+        .frost-input { height: 42px; border: 1px solid #cbd5e1; padding: 0 0.75rem; border-radius: 4px; width: 100%; background: white; font-size: 0.85rem; outline: none; }
+        .frost-input:focus { border-color: var(--frost-red); }
+        .label-text { font-size: 10px; font-weight: 900; color: #475569; text-transform: uppercase; margin-bottom: 4px; display: block; }
+        header, main { position: relative; z-index: 20; }
+        .btn-primary { background: var(--frost-red); color: white; font-weight: 900; text-transform: uppercase; transition: all 0.2s; cursor: pointer; }
+        .section-header-red { font-size: 14px; font-weight: 900; color: var(--frost-red); text-transform: uppercase; font-style: italic; }
+        
+        #map { width: 100%; height: 250px; border-radius: 4px; }
+        .map-wrapper { background: #e2e8f0; padding: 4px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.1); }
+        .parking-badge { display: none; font-size: 9px; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 2px 6px; border-radius: 99px; margin-top: 4px; font-weight: 800; }
+    </style>
+</head>
+<body class="p-8">
+
+    <div style="display: none;">
+        <input type="text" id="custName">
+        <input type="text" id="custCompany">
+        <input type="text" id="custPhone">
+        <input type="text" id="custEmail">
+    </div>
+
+    <!-- Login Screen with Logo -->
+    <div id="authOverlay">
+        <div class="bg-white p-10 rounded-lg shadow-2xl w-[450px] border-b-8 border-red-600 flex flex-col items-center">
+            <img src="logo.png" alt="Frost Transport" class="h-28 w-auto mb-8">
+            <h2 class="text-xl font-black italic mb-6 text-slate-800 uppercase tracking-tight">Portal Access</h2>
+            <div id="loginForm" class="space-y-4 w-full">
+                <input type="email" id="email" placeholder="Email Address" class="frost-input">
+                <input type="password" id="password" placeholder="Password" class="frost-input">
+                <button onclick="handleAuth('login')" class="w-full btn-primary py-4 rounded text-sm tracking-widest shadow-lg">Login to Secure System</button>
+                <p class="text-[9px] text-center text-slate-400 font-bold uppercase mt-4">Authorized Personnel Only</p>
+            </div>
+        </div>
+    </div>
+
+    <header class="max-w-[1600px] mx-auto mb-8 flex justify-between items-center border-b-2 border-slate-300 pb-6">
+        <div>
+            <img src="logo.png" alt="Frost Transport" class="h-24 w-auto mb-2">
+            <p class="text-[11px] font-bold text-slate-500 uppercase tracking-widest italic">Client Booking & Quote Engine | <span class="text-red-600">v7.7 Final Build</span></p>
+        </div>
+        <div class="text-right">
+            <div id="userBadge" class="text-xs font-black bg-white px-4 py-2 rounded border mb-2 uppercase italic text-red-600 tracking-tighter">Validating...</div>
+            <button onclick="logout()" class="text-[10px] font-bold text-red-600 uppercase border border-red-600 px-3 py-1 rounded hover:bg-red-50">Logout</button>
+        </div>
+    </header>
+
+    <main class="max-w-[1600px] mx-auto grid grid-cols-12 gap-6">
+        <div class="col-span-9 space-y-6">
+            <div class="grid grid-cols-2 gap-6">
+                <section class="frost-card">
+                    <div class="card-header-bar"></div>
+                    <div class="p-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="section-header-red">01. Journey Logistics</h3>
+                            <button onclick="clearJourney()" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-red-600 transition-colors">Clear Route</button>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <span class="label-text">Collection Date</span>
+                                <input type="date" id="colDate" class="frost-input font-bold" onchange="update()">
+                            </div>
+                            <div>
+                                <span class="label-text">Delivery Date</span>
+                                <input type="date" id="delDate" class="frost-input font-bold" onchange="update()">
+                                <div id="parkingAlert" class="parking-badge"><i class="fa-solid fa-shield-halved mr-1"></i> SECURE OVERNIGHT PARKING APPLIED</div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div><span class="label-text">Collection Point</span><input type="text" id="pickup" class="frost-input uppercase font-bold" onchange="calculate()" placeholder="POSTCODE"></div>
+                            <div><span class="label-text">Final Delivery</span><input type="text" id="delivery" class="frost-input uppercase font-bold" onchange="calculate()" placeholder="POSTCODE"></div>
+                        </div>
+                        
+                        <div id="waypointContainer" style="display: none;" class="mb-4 bg-slate-50 p-4 rounded border border-slate-200">
+                            <span class="label-text text-red-600 font-black">Intermediate Drops (£50 per stop)</span>
+                            <textarea id="waypoints" class="frost-input uppercase text-xs font-bold h-24 py-2 mb-3" placeholder="Enter postcodes - one per line" oninput="update()" onchange="calculate()"></textarea>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="optToggle" class="w-4 h-4 accent-red-600" onchange="calculate()">
+                                <span class="text-[10px] font-black uppercase text-slate-500 italic">Auto-Optimise Waypoint Order</span>
+                            </label>
+                        </div>
+
+                        <div class="flex gap-6 mb-6">
+                            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="multiDropCheck" class="w-4 h-4 accent-red-600" onchange="toggleMultiDrop()"><span class="label-text" style="margin:0">Multi-Drop Mode</span></label>
+                            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="manualMode" class="w-4 h-4 accent-red-600" onchange="toggleManual()"><span class="label-text" style="margin:0">Manual Override</span></label>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="p-3 bg-slate-50 rounded-lg text-center border border-slate-100"><span class="label-text">Calculated Miles</span><input type="number" id="mileInput" class="w-full text-center font-black text-xl bg-transparent border-none text-slate-800" value="0" oninput="update()" disabled></div>
+                            <div class="p-3 bg-slate-50 rounded-lg text-center border border-slate-100"><span class="label-text">Est. Transit (Hrs)</span><input type="number" id="timeInput" step="0.01" class="w-full text-center font-black text-xl bg-transparent border-none text-slate-800" value="0.00" oninput="update()" disabled></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="frost-card border-t-8 border-slate-800">
+                    <div class="p-6">
+                        <h3 class="section-header-red mb-4">02. Load Requirements</h3>
+                        <div class="grid grid-cols-2 gap-4 mb-6">
+                            <div><span class="label-text">Load Time (Hrs)</span><input type="number" id="loadHrs" value="1" step="0.5" class="frost-input text-center font-bold" oninput="update()"></div>
+                            <div><span class="label-text">Tip Time (Hrs)</span><input type="number" id="tipHrs" value="1" step="0.5" class="frost-input text-center font-bold" oninput="update()"></div>
+                        </div>
+                        <div class="space-y-3">
+                            <label class="flex items-center p-3 border rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group"><input type="checkbox" id="checkTailLift" onchange="update()" class="w-4 h-4 mr-3 accent-red-600"><span class="flex-grow text-[11px] font-bold uppercase text-slate-600 group-hover:text-red-600">Tail Lift Delivery</span><span class="text-red-600 font-black text-[11px]">£50.00</span></label>
+                            <label class="flex items-center p-3 border rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group"><input type="checkbox" id="checkPre10" onchange="update()" class="w-4 h-4 mr-3 accent-red-600"><span class="flex-grow text-[11px] font-bold uppercase text-slate-600 group-hover:text-red-600">Pre-10am Time Slot</span><span class="text-red-600 font-black text-[11px]">£25.00</span></label>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div class="map-wrapper shadow-xl">
+                <div id="map"></div>
+            </div>
+        </div>
+
+        <div class="col-span-3">
+            <div class="bg-slate-900 text-white p-6 h-full rounded-lg shadow-2xl flex flex-col justify-between border-4 border-slate-800">
+                <div>
+                    <h2 class="text-red-500 font-black italic uppercase tracking-widest text-[11px] mb-6 border-b border-slate-700 pb-3 flex justify-between">Job Summary <i class="fa-solid fa-file-invoice-dollar"></i></h2>
+                    <div class="mb-6 bg-slate-800/50 p-4 rounded-lg">
+                        <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Rate Breakdown</span>
+                        <div id="breakdown" class="mt-3 space-y-2 text-[12px] font-mono text-slate-300"></div>
+                    </div>
+                </div>
+                <div class="pt-6 border-t border-slate-700">
+                    <div class="text-center mb-6"><span class="label-text text-slate-500 text-xs">Total Cost (Excl. VAT)</span><div id="totalDisp" class="text-5xl font-black italic tracking-tighter text-white mt-1">£0.00</div></div>
+                    <button id="confirmBtn" onclick="saveJob()" class="w-full btn-primary py-5 rounded-lg font-black text-sm shadow-2xl active:scale-95 transition-all hover:bg-red-700">CONFIRM BOOKING</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const HOURLY_TOTAL = 61.241826; 
+        const MPG = 8;
+        const LTR_GAL = 4.546;
+
+        const _URL = "https://tdrzytgiqvdulityqttr.supabase.co";
+        const _KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkcnp5dGdpcXZkdWxpdHlxdHRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxNTM5NTMsImV4cCI6MjA4ODcyOTk1M30.XN46i7u6STD-2afmN7-Jh1MltADGpEuWlLt_n7wknbA";
+        const sb = supabase.createClient(_URL, _KEY);
+
+        let map, directionsRenderer, directionsService;
+
+        function initMap() {
+            directionsService = new google.maps.DirectionsService();
+            directionsRenderer = new google.maps.DirectionsRenderer({
+                polylineOptions: { strokeColor: "#c32026", strokeWeight: 5, strokeOpacity: 0.9 }
+            });
+            map = new google.maps.Map(document.getElementById("map"), {
+                zoom: 6,
+                center: { lat: 52.355, lng: -1.174 },
+                styles: [], 
+                disableDefaultUI: true
+            });
+            directionsRenderer.setMap(map);
+        }
+
+        window.onload = async () => {
+            const { data: { session } } = await sb.auth.getSession();
+            if (session?.user) setupUser(session.user);
+            else document.getElementById('authOverlay').style.display = 'flex';
+        };
+
+        function setupUser(user) {
+            document.getElementById('authOverlay').style.display = 'none';
+            document.getElementById('userBadge').innerText = user.user_metadata.full_name;
+            document.getElementById('custName').value = user.user_metadata.full_name;
+            document.getElementById('custCompany').value = user.user_metadata.company;
+            document.getElementById('custPhone').value = user.user_metadata.phone || "N/A";
+            document.getElementById('custEmail').value = user.email;
+            update();
+        }
+
+        function toggleMultiDrop() {
+            const isM = document.getElementById('multiDropCheck').checked;
+            document.getElementById('waypointContainer').style.display = isM ? 'block' : 'none';
+            calculate();
+        }
+
+        function toggleManual() {
+            const isM = document.getElementById('manualMode').checked;
+            document.getElementById('mileInput').disabled = !isM;
+            document.getElementById('timeInput').disabled = !isM;
+            if(!isM) calculate();
+        }
+
+        function clearJourney() {
+            document.getElementById('pickup').value = '';
+            document.getElementById('delivery').value = '';
+            document.getElementById('waypoints').value = '';
+            document.getElementById('colDate').value = '';
+            document.getElementById('delDate').value = '';
+            document.getElementById('mileInput').value = 0;
+            document.getElementById('timeInput').value = '0.00';
+            document.getElementById('optToggle').checked = false;
+            directionsRenderer.setDirections({routes: []});
+            update();
+        }
+
+        function calculate() {
+            const p = document.getElementById('pickup').value;
+            const d = document.getElementById('delivery').value;
+            if (p.length < 3 || d.length < 3) return;
+
+            let wps = [];
+            if (document.getElementById('multiDropCheck').checked) {
+                document.getElementById('waypoints').value.split('\n').forEach(l => { 
+                    if(l.trim().length > 2) wps.push({location:l.trim(), stopover:true}); 
+                });
+            }
+
+            directionsService.route({
+                origin: p, 
+                destination: d, 
+                waypoints: wps, 
+                optimizeWaypoints: document.getElementById('optToggle').checked, 
+                travelMode: 'DRIVING'
+            }, (res, stat) => {
+                if (stat === 'OK') {
+                    directionsRenderer.setDirections(res);
+                    let m = 0; let s = 0;
+                    res.routes[0].legs.forEach(leg => { m += leg.distance.value; s += leg.duration.value; });
+                    if(!document.getElementById('manualMode').checked) {
+                        document.getElementById('mileInput').value = Math.round((m * 0.000621371) * 1.05);
+                        document.getElementById('timeInput').value = ((s / 3600) * 1.25).toFixed(2);
+                    }
+                    update();
+                }
+            });
+        }
+
+        function update() {
+            const margin = 1.25; 
+            const ppl = 1.25;
+            const miles = parseFloat(document.getElementById('mileInput').value) || 0;
+            const driveHrs = parseFloat(document.getElementById('timeInput').value) || 0;
+            const loadHrs = parseFloat(document.getElementById('loadHrs').value || 0);
+            const tipHrs = parseFloat(document.getElementById('tipHrs').value || 0);
+            const totalHrs = driveHrs + loadHrs + tipHrs;
+            
+            const costTime = totalHrs * HOURLY_TOTAL;
+            const costFuel = (miles / MPG) * LTR_GAL * ppl;
+            const transportSubtotal = (costTime + costFuel) * margin;
+
+            let flatFees = 0;
+            let dropCount = 0;
+            
+            const cDate = document.getElementById('colDate').value;
+            const dDate = document.getElementById('delDate').value;
+            let parkingApplied = false;
+            if(cDate && dDate && cDate !== dDate) {
+                flatFees += 50;
+                parkingApplied = true;
+                document.getElementById('parkingAlert').style.display = 'inline-block';
+            } else {
+                document.getElementById('parkingAlert').style.display = 'none';
+            }
+
+            if(document.getElementById('checkTailLift').checked) flatFees += 50;
+            if(document.getElementById('checkPre10').checked) flatFees += 25;
+            if(document.getElementById('multiDropCheck').checked) {
+                document.getElementById('waypoints').value.split('\n').forEach(line => { if(line.trim().length > 2) dropCount++; });
+                flatFees += (dropCount * 50);
+            }
+
+            const finalQuote = Math.ceil(((transportSubtotal + flatFees) - 0.01) / 10) * 10;
+            document.getElementById('totalDisp').innerText = '£' + (finalQuote || 0).toFixed(2);
+            document.getElementById('breakdown').innerHTML = `
+                <div class="flex justify-between"><span>Base Transport</span><span>£${transportSubtotal.toFixed(2)}</span></div>
+                ${dropCount > 0 ? `<div class="flex justify-between"><span>Extra Drops (${dropCount})</span><span>£${(dropCount*50).toFixed(2)}</span></div>` : ''}
+                ${parkingApplied ? `<div class="flex justify-between"><span>Secure Parking</span><span>£50.00</span></div>` : ''}
+                ${(flatFees - (dropCount*50) - (parkingApplied ? 50 : 0)) > 0 ? `<div class="flex justify-between"><span>Service Surcharges</span><span>£${(flatFees - (dropCount*50) - (parkingApplied ? 50 : 0)).toFixed(2)}</span></div>` : ''}
+            `;
+        }
+
+        async function saveJob() {
+            const payload = {
+                pickup: document.getElementById('pickup').value,
+                delivery: document.getElementById('delivery').value,
+                customer_name: document.getElementById('custName').value,
+                total_price: parseFloat(document.getElementById('totalDisp').innerText.replace('£','')),
+                collection_date: document.getElementById('colDate').value,
+                delivery_date: document.getElementById('delDate').value
+            };
+            const { error } = await sb.from('quotes').insert([payload]);
+            if (!error) alert("Booking Confirmed!");
+        }
+
+        async function handleAuth(type) {
+            const { data, error } = await sb.auth.signInWithPassword({
+                email: document.getElementById('email').value,
+                password: document.getElementById('password').value
+            });
+            if (error) alert(error.message); else setupUser(data.user);
+        }
+
+        async function logout() { await sb.auth.signOut(); location.reload(); }
+    </script>
+</body>
+</html>
